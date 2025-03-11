@@ -2,7 +2,7 @@
 
 ## MVP with Dual Deadlines, Pre-Defined Sequential Escrow & Integrated Dispute Resolution but Zero Platform Fees
 
-This document details the requirements for an on-chain escrow contract written in Solidity for deployment on the Arbitrum Sepolia testnet. 
+This document details the requirements for an on-chain escrow contract written in Solidity >0.8 for deployment on the Arbitrum Sepolia testnet. 
 
 The contract implements a sequential escrow mechanism for both P2P and chained remittance trades using USDC, with comprehensive dispute resolution capabilities. It enforces strict rules for deposit, fiat confirmation, cancellation, release and dispute handling.
 
@@ -162,6 +162,25 @@ CREATE TABLE dispute_resolutions (
 );
 ```
 
+### State Transition Overview
+
+────────────────────────────
+| Current State | Trigger / Event                                         | Next State | Conditions/Notes                                                         |
+|---------------|---------------------------------------------------------|------------|--------------------------------------------------------------------------|
+| Created       | Seller funds escrow before deposit deadline           | Funded     | Tokens transferred in full within the 15‑minute deposit deadline         |
+| Created       | Deposit deadline expires without funding              | Cancelled  | Escrow auto‑cancels if no funds are received                             |
+| Funded        | Buyer calls mark_fiat_paid within fiat deadline         | Funded*    | Fiat flag is set (state remains Funded but with the fiat_paid flag true)  |
+| Funded        | Seller/Arbitrator cancels when fiat not marked paid and fiat deadline expired  | Cancelled  | Cancellation triggered if fiat payment is not confirmed on time          |
+| Funded        | Seller (or Arbitrator) releases escrow with fiat marked paid      | Released   | Funds are transferred (directly to Buyer or to sequential escrow per trade) |
+| Funded        | Buyer or Seller initiates dispute (after fiat paid)     | Disputed   | 5% bond posted; dispute is initiated                                      |
+| Disputed      | Dispute response submitted by the opposing party        | Disputed   | Evidence and additional bond provided; state remains Disputed until resolved |
+| Disputed      | Response deadline expires without a response            | Resolved   | Default judgment applied (non‑responding party loses)                     |
+| Disputed      | Arbitrator resolves dispute (with explanation)          | Resolved   | Funds and bonds reallocated per arbitrator’s decision                     |
+| Released      | Terminal state (no further transitions)                 | -          |                                                                        |
+| Cancelled     | Terminal state (no further transitions)                 | -          |                                                                        |
+| Resolved      | Terminal state (no further transitions)                 | -          |                                                                        |
+
+*Note: In the “Funded” state after fiat is marked paid, while the fiat_paid flag is set, the overall state remains Funded until a release or dispute action occurs.
 
 ## 4. Functional Requirements
 
@@ -462,6 +481,14 @@ Every critical action emits an event for transparency and auditability:
 - Build an arbitrator dashboard.
 - Set up a resolution notification system with detailed summaries.
 
+### Upgradeability & Administration
+ – Use OpenZeppelin’s TransparentUpgradeableProxy, ProxyAdmin, and Initializable contracts to manage upgrades securely.  
+ – Inherit from OpenZeppelin’s Initializable in your main escrow contract so that constructor logic executes properly in an upgradeable context.  
+ – Use OpenZeppelin’s Ownable contract to manage a single central administrator who handles upgrades and sensitive functions.  
+
+### Security Enhancements
+ – Integrate OpenZeppelin’s ReentrancyGuard to protect functions performing external token transfers.  
+ – Use Pausable to enable emergency stops if needed for the post-testnet version.
 
 ## 8. Testing Requirements
 
@@ -503,6 +530,13 @@ Every critical action emits an event for transparency and auditability:
 ### Gasless Transactions
 - Future integration for sponsored transactions to reduce user gas fees.
 
+### Privacy Considerations for Dispute Evidence
+
+### Document the Upgrade Process
+
+### Trade Identifier Convention
+
+Ensure that the trade identifier convention is automated or checked on-chain to prevent manual errors.
 
 ## 10. Escrow Flow Diagram
 
