@@ -1,6 +1,5 @@
 # Notes
 
-- read arb docs
-- identify fixed arbitrator address
-- build full contract
-- add detailed readme
+- https://docs.celo.org/
+- identify fixed arbitrator address: cli wallet?
+- add detailed readme with chart and table
