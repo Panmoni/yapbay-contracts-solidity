@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+pragma solidity 0.8.17;
 
 // USDC on Celo: 0xcebA9300f2b948710d2653dD7B07f33A8B32118C
 // Alfajores testnet via https://alfajores-forno.celo-testnet.org
@@ -7,8 +7,8 @@ pragma solidity ^0.8.17;
 
 // Import OpenZeppelin upgradeable libraries
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol"; 
-import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol"; 
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
@@ -28,13 +28,25 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeab
     
   Disputes require each party to post a 5% bond and submit a SHA‑256 evidence hash.
 */
-contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, PausableUpgradeable {
+contract YapBayEscrow is
+    Initializable,
+    OwnableUpgradeable,
+    ReentrancyGuardUpgradeable,
+    PausableUpgradeable
+{
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
     // -------------------------------
     // Structures and Enumerations
     // -------------------------------
-    enum EscrowState { Created, Funded, Released, Cancelled, Disputed, Resolved }
+    enum EscrowState {
+        Created,
+        Funded,
+        Released,
+        Cancelled,
+        Disputed,
+        Resolved
+    }
 
     struct Escrow {
         // Base fields
@@ -43,15 +55,14 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
         address seller;
         address buyer;
         address arbitrator;
-        uint256 amount;              // amount in USDC smallest unit (e.g. 6 decimals)
-        uint256 deposit_deadline;    // timestamp deadline for deposit (15min after creation)
-        uint256 fiat_deadline;       // timestamp deadline for fiat confirmation (set at funding)
+        uint256 amount; // amount in USDC smallest unit (e.g. 6 decimals)
+        uint256 deposit_deadline; // timestamp deadline for deposit (15min after creation)
+        uint256 fiat_deadline; // timestamp deadline for fiat confirmation (set at funding)
         EscrowState state;
         bool sequential;
         address sequential_escrow_address;
         bool fiat_paid;
-        uint256 counter;             // audit counter (increments on each state transition)
-
+        uint256 counter; // audit counter (increments on each state transition)
         // Dispute-related fields (initially zero)
         address dispute_initiator;
         uint256 dispute_bond_buyer;
@@ -72,11 +83,11 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
     address public fixedArbitrator;
 
     // Constants (USDC assumed to have 6 decimals)
-    uint256 public constant MAX_AMOUNT = 100 * (10 ** 6);  // 100 USDC maximum
-    uint256 public constant DEPOSIT_DURATION = 15 * 60;      // 15 minutes in seconds
-    uint256 public constant FIAT_DURATION = 30 * 60;         // 30 minutes in seconds
+    uint256 public constant MAX_AMOUNT = 100 * (10 ** 6); // 100 USDC maximum
+    uint256 public constant DEPOSIT_DURATION = 15 * 60; // 15 minutes in seconds
+    uint256 public constant FIAT_DURATION = 30 * 60; // 30 minutes in seconds
     uint256 public constant DISPUTE_RESPONSE_DURATION = 72 * 3600; // 72 hours in seconds
-    uint256 public constant ARBITRATION_DURATION = 168 * 3600;     // 168 hours (7 days) in seconds
+    uint256 public constant ARBITRATION_DURATION = 168 * 3600; // 168 hours (7 days) in seconds
 
     // -------------------------------
     // Events
@@ -160,7 +171,10 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
     // -------------------------------
     // Initializer (instead of constructor)
     // -------------------------------
-    function initialize(IERC20Upgradeable _usdc, address _arbitrator) public initializer {
+    function initialize(
+        IERC20Upgradeable _usdc,
+        address _arbitrator
+    ) public initializer {
         __Ownable_init();
         __Pausable_init();
         __ReentrancyGuard_init();
@@ -192,7 +206,10 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
         require(_amount <= MAX_AMOUNT, "E101: Amount exceeds maximum limit");
         require(_buyer != address(0), "E102: Invalid buyer address");
         if (_sequential) {
-            require(_sequentialEscrowAddress != address(0), "E106: Missing sequential escrow address");
+            require(
+                _sequentialEscrowAddress != address(0),
+                "E106: Missing sequential escrow address"
+            );
         }
         Escrow memory newEscrow;
         newEscrow.escrow_id = nextEscrowId;
@@ -205,7 +222,9 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
         newEscrow.fiat_deadline = 0; // to be set at funding
         newEscrow.state = EscrowState.Created;
         newEscrow.sequential = _sequential;
-        newEscrow.sequential_escrow_address = _sequential ? _sequentialEscrowAddress : address(0);
+        newEscrow.sequential_escrow_address = _sequential
+            ? _sequentialEscrowAddress
+            : address(0);
         newEscrow.fiat_paid = false;
         newEscrow.counter = 0;
 
@@ -234,9 +253,15 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
     /// @param _escrowId The escrow identifier.
     function fundEscrow(uint256 _escrowId) external nonReentrant whenNotPaused {
         Escrow storage escrow = escrows[_escrowId];
-        require(escrow.state == EscrowState.Created, "E105: Invalid state transition");
+        require(
+            escrow.state == EscrowState.Created,
+            "E105: Invalid state transition"
+        );
         require(msg.sender == escrow.seller, "E102: Unauthorized caller");
-        require(block.timestamp <= escrow.deposit_deadline, "E103: Deposit deadline expired");
+        require(
+            block.timestamp <= escrow.deposit_deadline,
+            "E103: Deposit deadline expired"
+        );
 
         // Use SafeERC20Upgradeable for token transfer
         usdc.safeTransferFrom(msg.sender, address(this), escrow.amount);
@@ -244,7 +269,13 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
         escrow.state = EscrowState.Funded;
         escrow.fiat_deadline = block.timestamp + FIAT_DURATION;
         escrow.counter++;
-        emit FundsDeposited(_escrowId, escrow.trade_id, escrow.amount, escrow.counter, block.timestamp);
+        emit FundsDeposited(
+            _escrowId,
+            escrow.trade_id,
+            escrow.amount,
+            escrow.counter,
+            block.timestamp
+        );
     }
 
     // -------------------------------
@@ -254,9 +285,15 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
     /// @param _escrowId The escrow identifier.
     function markFiatPaid(uint256 _escrowId) external whenNotPaused {
         Escrow storage escrow = escrows[_escrowId];
-        require(escrow.state == EscrowState.Funded, "E105: Invalid state transition");
+        require(
+            escrow.state == EscrowState.Funded,
+            "E105: Invalid state transition"
+        );
         require(msg.sender == escrow.buyer, "E102: Unauthorized caller");
-        require(block.timestamp <= escrow.fiat_deadline, "E104: Fiat payment deadline expired");
+        require(
+            block.timestamp <= escrow.fiat_deadline,
+            "E104: Fiat payment deadline expired"
+        );
 
         escrow.fiat_paid = true;
         emit FiatMarkedPaid(_escrowId, escrow.trade_id, block.timestamp);
@@ -268,21 +305,32 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
     /// @notice If the escrow is sequential, the Buyer can update the leg2 address.
     /// @param _escrowId The escrow identifier.
     /// @param newSequentialAddress The new sequential escrow address.
-    function updateSequentialAddress(uint256 _escrowId, address newSequentialAddress) external whenNotPaused {
+    function updateSequentialAddress(
+        uint256 _escrowId,
+        address newSequentialAddress
+    ) external whenNotPaused {
         Escrow storage escrow = escrows[_escrowId];
         require(escrow.sequential, "E106: Escrow is not sequential");
         require(
             escrow.state != EscrowState.Released &&
-            escrow.state != EscrowState.Cancelled &&
-            escrow.state != EscrowState.Resolved,
+                escrow.state != EscrowState.Cancelled &&
+                escrow.state != EscrowState.Resolved,
             "E107: Escrow in terminal state"
         );
         require(msg.sender == escrow.buyer, "E102: Unauthorized caller");
-        require(newSequentialAddress != address(0), "E102: Invalid sequential address");
+        require(
+            newSequentialAddress != address(0),
+            "E102: Invalid sequential address"
+        );
 
         address oldAddress = escrow.sequential_escrow_address;
         escrow.sequential_escrow_address = newSequentialAddress;
-        emit SequentialAddressUpdated(_escrowId, oldAddress, newSequentialAddress, block.timestamp);
+        emit SequentialAddressUpdated(
+            _escrowId,
+            oldAddress,
+            newSequentialAddress,
+            block.timestamp
+        );
     }
 
     // -------------------------------
@@ -292,16 +340,25 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
     ///         – For standard trades, funds go to the Buyer.
     ///         – For sequential trades, funds go to the designated sequential escrow address.
     /// @param _escrowId The escrow identifier.
-    function releaseEscrow(uint256 _escrowId) external nonReentrant whenNotPaused {
+    function releaseEscrow(
+        uint256 _escrowId
+    ) external nonReentrant whenNotPaused {
         Escrow storage escrow = escrows[_escrowId];
-        require(escrow.state == EscrowState.Funded, "E105: Invalid state transition");
+        require(
+            escrow.state == EscrowState.Funded,
+            "E105: Invalid state transition"
+        );
         // Only the Seller (if fiat confirmed) or arbitrator may trigger a release.
         require(
-            (msg.sender == escrow.seller && escrow.fiat_paid) || msg.sender == fixedArbitrator,
+            (msg.sender == escrow.seller && escrow.fiat_paid) ||
+                msg.sender == fixedArbitrator,
             "E102: Unauthorized caller or fiat not confirmed"
         );
         if (escrow.sequential) {
-            require(escrow.sequential_escrow_address != address(0), "E106: Missing sequential escrow address");
+            require(
+                escrow.sequential_escrow_address != address(0),
+                "E106: Missing sequential escrow address"
+            );
         }
 
         escrow.state = EscrowState.Released;
@@ -309,10 +366,26 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
 
         if (escrow.sequential) {
             usdc.safeTransfer(escrow.sequential_escrow_address, escrow.amount);
-            emit EscrowReleased(_escrowId, escrow.trade_id, escrow.buyer, escrow.amount, escrow.counter, block.timestamp, "sequential escrow");
+            emit EscrowReleased(
+                _escrowId,
+                escrow.trade_id,
+                escrow.buyer,
+                escrow.amount,
+                escrow.counter,
+                block.timestamp,
+                "sequential escrow"
+            );
         } else {
             usdc.safeTransfer(escrow.buyer, escrow.amount);
-            emit EscrowReleased(_escrowId, escrow.trade_id, escrow.buyer, escrow.amount, escrow.counter, block.timestamp, "direct to buyer");
+            emit EscrowReleased(
+                _escrowId,
+                escrow.trade_id,
+                escrow.buyer,
+                escrow.amount,
+                escrow.counter,
+                block.timestamp,
+                "direct to buyer"
+            );
         }
     }
 
@@ -323,24 +396,49 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
     ///         – In state Created, cancellation is possible if the deposit deadline expired.
     ///         – In state Funded, allowed only if fiat is not yet confirmed and the fiat deadline expired.
     /// @param _escrowId The escrow identifier.
-    function cancelEscrow(uint256 _escrowId) external nonReentrant whenNotPaused {
+    function cancelEscrow(
+        uint256 _escrowId
+    ) external nonReentrant whenNotPaused {
         Escrow storage escrow = escrows[_escrowId];
-        require(escrow.state == EscrowState.Created || escrow.state == EscrowState.Funded, "E105: Invalid state transition");
-        require(msg.sender == escrow.seller || msg.sender == fixedArbitrator, "E102: Unauthorized caller");
+        require(
+            escrow.state == EscrowState.Created ||
+                escrow.state == EscrowState.Funded,
+            "E105: Invalid state transition"
+        );
+        require(
+            msg.sender == escrow.seller || msg.sender == fixedArbitrator,
+            "E102: Unauthorized caller"
+        );
 
         if (escrow.state == EscrowState.Created) {
-            require(block.timestamp > escrow.deposit_deadline, "Cannot cancel: deposit deadline not expired");
+            require(
+                block.timestamp > escrow.deposit_deadline,
+                "Cannot cancel: deposit deadline not expired"
+            );
         }
         if (escrow.state == EscrowState.Funded) {
-            require(!escrow.fiat_paid, "E105: Fiat already confirmed, cannot cancel");
-            require(block.timestamp > escrow.fiat_deadline, "Cannot cancel: fiat deadline not expired");
+            require(
+                !escrow.fiat_paid,
+                "E105: Fiat already confirmed, cannot cancel"
+            );
+            require(
+                block.timestamp > escrow.fiat_deadline,
+                "Cannot cancel: fiat deadline not expired"
+            );
             // Refund funds to Seller.
             usdc.safeTransfer(escrow.seller, escrow.amount);
         }
 
         escrow.state = EscrowState.Cancelled;
         escrow.counter++;
-        emit EscrowCancelled(_escrowId, escrow.trade_id, escrow.seller, escrow.amount, escrow.counter, block.timestamp);
+        emit EscrowCancelled(
+            _escrowId,
+            escrow.trade_id,
+            escrow.seller,
+            escrow.amount,
+            escrow.counter,
+            block.timestamp
+        );
     }
 
     // -------------------------------
@@ -351,14 +449,26 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
     ///         The caller must post a 5% bond and provide an evidence hash.
     /// @param _escrowId The escrow identifier.
     /// @param evidenceHash The SHA‑256 hash of the dispute evidence.
-    function openDisputeWithBond(uint256 _escrowId, bytes32 evidenceHash) external nonReentrant whenNotPaused {
+    function openDisputeWithBond(
+        uint256 _escrowId,
+        bytes32 evidenceHash
+    ) external nonReentrant whenNotPaused {
         Escrow storage escrow = escrows[_escrowId];
-        require(escrow.state == EscrowState.Funded, "E105: Invalid state transition");
+        require(
+            escrow.state == EscrowState.Funded,
+            "E105: Invalid state transition"
+        );
         require(escrow.fiat_paid, "Fiat must be confirmed before dispute");
-        require(msg.sender == escrow.seller || msg.sender == escrow.buyer, "E102: Unauthorized caller");
-        require(escrow.dispute_initiator == address(0), "Dispute already initiated");
+        require(
+            msg.sender == escrow.seller || msg.sender == escrow.buyer,
+            "E102: Unauthorized caller"
+        );
+        require(
+            escrow.dispute_initiator == address(0),
+            "Dispute already initiated"
+        );
 
-        uint256 bondAmount = escrow.amount * 5 / 100;
+        uint256 bondAmount = (escrow.amount * 5) / 100;
         usdc.safeTransferFrom(msg.sender, address(this), bondAmount);
         escrow.dispute_initiated_time = block.timestamp;
         escrow.dispute_initiator = msg.sender;
@@ -371,7 +481,13 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
         }
         escrow.state = EscrowState.Disputed;
         escrow.counter++;
-        emit DisputeOpened(_escrowId, escrow.trade_id, msg.sender, bondAmount, block.timestamp);
+        emit DisputeOpened(
+            _escrowId,
+            escrow.trade_id,
+            msg.sender,
+            bondAmount,
+            block.timestamp
+        );
     }
 
     // 2. Dispute Response
@@ -379,22 +495,38 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
     ///         The responder must post the same 5% bond and an evidence hash.
     /// @param _escrowId The escrow identifier.
     /// @param evidenceHash The SHA‑256 hash of the responder’s evidence.
-    function respondToDisputeWithBond(uint256 _escrowId, bytes32 evidenceHash) external nonReentrant whenNotPaused {
+    function respondToDisputeWithBond(
+        uint256 _escrowId,
+        bytes32 evidenceHash
+    ) external nonReentrant whenNotPaused {
         Escrow storage escrow = escrows[_escrowId];
-        require(escrow.state == EscrowState.Disputed, "E105: Invalid state transition");
+        require(
+            escrow.state == EscrowState.Disputed,
+            "E105: Invalid state transition"
+        );
 
         // If dispute was initiated by buyer then the responder must be seller and vice-versa.
         if (escrow.dispute_initiator == escrow.buyer) {
             require(msg.sender == escrow.seller, "E102: Unauthorized caller");
-            require(escrow.dispute_evidence_hash_seller == bytes32(0), "Dispute already responded by seller");
+            require(
+                escrow.dispute_evidence_hash_seller == bytes32(0),
+                "Dispute already responded by seller"
+            );
         } else if (escrow.dispute_initiator == escrow.seller) {
             require(msg.sender == escrow.buyer, "E102: Unauthorized caller");
-            require(escrow.dispute_evidence_hash_buyer == bytes32(0), "Dispute already responded by buyer");
+            require(
+                escrow.dispute_evidence_hash_buyer == bytes32(0),
+                "Dispute already responded by buyer"
+            );
         } else {
             revert("E102: Invalid dispute initiator");
         }
-        require(block.timestamp <= escrow.dispute_initiated_time + DISPUTE_RESPONSE_DURATION, "E111: Dispute response period expired");
-        uint256 bondAmount = escrow.amount * 5 / 100;
+        require(
+            block.timestamp <=
+                escrow.dispute_initiated_time + DISPUTE_RESPONSE_DURATION,
+            "E111: Dispute response period expired"
+        );
+        uint256 bondAmount = (escrow.amount * 5) / 100;
         usdc.safeTransferFrom(msg.sender, address(this), bondAmount);
         if (msg.sender == escrow.buyer) {
             escrow.dispute_bond_buyer = bondAmount;
@@ -410,20 +542,35 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
     /// @notice Called by the arbitrator if the opposing party fails to respond within 72 hours.
     ///         The function transfers funds according to the default outcome.
     /// @param _escrowId The escrow identifier.
-    function defaultJudgment(uint256 _escrowId) external nonReentrant whenNotPaused {
+    function defaultJudgment(
+        uint256 _escrowId
+    ) external nonReentrant whenNotPaused {
         require(msg.sender == fixedArbitrator, "E102: Unauthorized caller");
         Escrow storage escrow = escrows[_escrowId];
-        require(escrow.state == EscrowState.Disputed, "E105: Invalid state transition");
-        require(block.timestamp >= escrow.dispute_initiated_time + DISPUTE_RESPONSE_DURATION, "Response period not expired");
+        require(
+            escrow.state == EscrowState.Disputed,
+            "E105: Invalid state transition"
+        );
+        require(
+            block.timestamp >=
+                escrow.dispute_initiated_time + DISPUTE_RESPONSE_DURATION,
+            "Response period not expired"
+        );
 
         address winner;
         string memory judgment;
         // Decide based on which party did NOT respond.
-        if (escrow.dispute_initiator == escrow.buyer && escrow.dispute_evidence_hash_seller == bytes32(0)) {
+        if (
+            escrow.dispute_initiator == escrow.buyer &&
+            escrow.dispute_evidence_hash_seller == bytes32(0)
+        ) {
             winner = escrow.buyer;
             judgment = "Buyer wins by default";
             if (escrow.sequential) {
-                usdc.safeTransfer(escrow.sequential_escrow_address, escrow.amount);
+                usdc.safeTransfer(
+                    escrow.sequential_escrow_address,
+                    escrow.amount
+                );
             } else {
                 usdc.safeTransfer(escrow.buyer, escrow.amount);
             }
@@ -433,7 +580,10 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
             if (escrow.dispute_bond_seller > 0) {
                 usdc.safeTransfer(fixedArbitrator, escrow.dispute_bond_seller);
             }
-        } else if (escrow.dispute_initiator == escrow.seller && escrow.dispute_evidence_hash_buyer == bytes32(0)) {
+        } else if (
+            escrow.dispute_initiator == escrow.seller &&
+            escrow.dispute_evidence_hash_buyer == bytes32(0)
+        ) {
             winner = escrow.seller;
             judgment = "Seller wins by default";
             usdc.safeTransfer(escrow.seller, escrow.amount);
@@ -448,12 +598,17 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
         }
         escrow.state = EscrowState.Resolved;
         escrow.counter++;
-        emit DisputeResolved(_escrowId, winner == escrow.buyer, bytes32(0), judgment);
+        emit DisputeResolved(
+            _escrowId,
+            winner == escrow.buyer,
+            bytes32(0),
+            judgment
+        );
     }
 
     // 4. Arbitration Process
     /// @notice Called by the arbitrator to resolve a dispute with an explanation.
-    ///         The decision (true means funds released, false means cancellation) 
+    ///         The decision (true means funds released, false means cancellation)
     ///         determines funds and bond allocation.
     /// @param _escrowId The escrow identifier.
     /// @param decision Arbitrator’s decision (true: Buyer wins; false: Seller wins).
@@ -465,9 +620,15 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
     ) external nonReentrant whenNotPaused {
         require(msg.sender == fixedArbitrator, "E102: Unauthorized caller");
         Escrow storage escrow = escrows[_escrowId];
-        require(escrow.state == EscrowState.Disputed, "E105: Invalid state transition");
         require(
-            block.timestamp <= escrow.dispute_initiated_time + DISPUTE_RESPONSE_DURATION + ARBITRATION_DURATION,
+            escrow.state == EscrowState.Disputed,
+            "E105: Invalid state transition"
+        );
+        require(
+            block.timestamp <=
+                escrow.dispute_initiated_time +
+                    DISPUTE_RESPONSE_DURATION +
+                    ARBITRATION_DURATION,
             "E113: Arbitration deadline exceeded"
         );
         escrow.dispute_resolution_hash = explanationHash;
@@ -476,7 +637,10 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
         if (decision) {
             // Buyer wins – transfer funds to buyer (or sequential escrow address).
             if (escrow.sequential) {
-                usdc.safeTransfer(escrow.sequential_escrow_address, escrow.amount);
+                usdc.safeTransfer(
+                    escrow.sequential_escrow_address,
+                    escrow.amount
+                );
             } else {
                 usdc.safeTransfer(escrow.buyer, escrow.amount);
             }
@@ -500,7 +664,12 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
         }
         escrow.state = EscrowState.Resolved;
         escrow.counter++;
-        emit DisputeResolved(_escrowId, decision, explanationHash, bondAllocation);
+        emit DisputeResolved(
+            _escrowId,
+            decision,
+            explanationHash,
+            bondAllocation
+        );
     }
 
     // -------------------------------
@@ -515,21 +684,34 @@ contract YapBayEscrow is Initializable, OwnableUpgradeable, ReentrancyGuardUpgra
         Escrow storage escrow = escrows[_escrowId];
         require(
             escrow.state != EscrowState.Released &&
-            escrow.state != EscrowState.Cancelled &&
-            escrow.state != EscrowState.Resolved,
+                escrow.state != EscrowState.Cancelled &&
+                escrow.state != EscrowState.Resolved,
             "E107: Escrow in terminal state"
         );
 
         if (escrow.state == EscrowState.Created) {
-            require(block.timestamp > escrow.deposit_deadline, "Deposit deadline not expired");
+            require(
+                block.timestamp > escrow.deposit_deadline,
+                "Deposit deadline not expired"
+            );
         }
         if (escrow.state == EscrowState.Funded) {
             require(!escrow.fiat_paid, "Fiat already paid; cannot auto-cancel");
-            require(block.timestamp > escrow.fiat_deadline, "Fiat deadline not expired");
+            require(
+                block.timestamp > escrow.fiat_deadline,
+                "Fiat deadline not expired"
+            );
             usdc.safeTransfer(escrow.seller, escrow.amount);
         }
         escrow.state = EscrowState.Cancelled;
         escrow.counter++;
-        emit EscrowCancelled(_escrowId, escrow.trade_id, escrow.seller, escrow.amount, escrow.counter, block.timestamp);
+        emit EscrowCancelled(
+            _escrowId,
+            escrow.trade_id,
+            escrow.seller,
+            escrow.amount,
+            escrow.counter,
+            block.timestamp
+        );
     }
 }
