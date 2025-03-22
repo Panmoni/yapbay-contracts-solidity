@@ -149,8 +149,8 @@ Key dependencies listed in `package.json`:
 This project is licensed under the MIT License - see the `SPDX-License-Identifier: MIT` in `YapBayEscrow.sol`.
 
 ## Related Repos
-- [https://github.com/Panmoni/yapbay](https://github.com/Panmoni/yapbay)
-- [https://github.com/Panmoni/yapbay-www](https://github.com/Panmoni/yapbay-www)
-- [https://github.com/Panmoni/yapbay-contracts-sui](https://github.com/Panmoni/yapbay-contracts-sui)
+- [https://github.com/Panmoni/yapbay](https://github.com/Panmoni/yapbay) (primary repo for the project)
+- [https://github.com/Panmoni/yapbay-www](https://github.com/Panmoni/yapbay-www) (static Astro.js website)
+- [https://github.com/Panmoni/yapbay-contracts-sui](https://github.com/Panmoni/yapbay-contracts-sui) (Sui contracts in Move)
 - [https://github.com/Panmoni/yapbay-litepaper](https://github.com/Panmoni/yapbay-litepaper)
 - [https://github.com/Panmoni/yapbay-contracts](https://github.com/Panmoni/yapbay-contracts) (old)
