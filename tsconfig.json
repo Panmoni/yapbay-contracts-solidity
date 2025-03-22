@@ -6,6 +6,11 @@
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true
-  }
+    "resolveJsonModule": true,
+    "rootDir": "./",
+    "outDir": "./dist",
+    "types": ["node", "mocha"],
+    "typeRoots": ["./node_modules/@types", "./node_modules/@nomicfoundation/hardhat-toolbox/types"]
+  },
+  "include": ["hardhat.config.ts", "scripts/**/*", "test/**/*"]
 }
