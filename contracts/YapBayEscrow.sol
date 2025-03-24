@@ -12,6 +12,7 @@ import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.
 import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /*
   YapBayEscrow is an upgradeable on-chain escrow that supports standard and 
@@ -32,7 +33,8 @@ contract YapBayEscrow is
     Initializable,
     OwnableUpgradeable,
     ReentrancyGuardUpgradeable,
-    PausableUpgradeable
+    PausableUpgradeable,
+    UUPSUpgradeable
 {
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
@@ -176,8 +178,9 @@ contract YapBayEscrow is
         address _arbitrator
     ) public initializer {
         __Ownable_init();
-        __Pausable_init();
         __ReentrancyGuard_init();
+        __Pausable_init();
+        __UUPSUpgradeable_init();
         require(address(_usdc) != address(0), "Invalid USDC address");
         require(_arbitrator != address(0), "E102: Invalid arbitrator address");
         usdc = _usdc;
@@ -675,10 +678,13 @@ contract YapBayEscrow is
     // -------------------------------
     // H. Auto-Cancellation on Deadline
     // -------------------------------
-    /// @notice Called by the arbitrator to auto‑cancel an escrow when deadlines are exceeded.
-    ///         – For escrows still in Created (if deposit deadline passed) or Funded (fiat not confirmed
-    ///           and fiat deadline passed).
-    /// @param _escrowId The escrow identifier.
+    /// @notice Called by the arbitrator to auto-cancel an escrow when deadlines are exceeded
+    /// @dev For escrows still in Created (if deposit deadline passed) or Funded (fiat not confirmed
+    ///      and fiat deadline passed)
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {}
+
     function autoCancel(uint256 _escrowId) external nonReentrant whenNotPaused {
         require(msg.sender == fixedArbitrator, "E102: Unauthorized caller");
         Escrow storage escrow = escrows[_escrowId];

@@ -6,22 +6,26 @@ describe("YapBayEscrow", function () {
   let escrow: YapBayEscrow;
   let usdc: any;
 
+  let deployer: any;
+
   beforeEach(async () => {
+    [deployer] = await ethers.getSigners();
     // Deploy mock USDC
     const ERC20Mock = await ethers.getContractFactory("ERC20Mock");
-    usdc = await ERC20Mock.deploy("USDC", "USDC", 6);
+    usdc = await upgrades.deployProxy(ERC20Mock, ["USDC", "USDC", ethers.parseUnits("1000", 6)], { kind: 'uups' });
     
     // Deploy YapBayEscrow
     const YapBayEscrow = await ethers.getContractFactory("YapBayEscrow");
-    const deployed = await upgrades.deployProxy(YapBayEscrow, [
-      usdc.address,
-      process.env.ARBITRATOR_ADDRESS
-    ]);
-    escrow = YapBayEscrow__factory.connect(deployed.target as string, deployed.runner);
+    const escrowInstance = await upgrades.deployProxy(
+      await ethers.getContractFactory("YapBayEscrow"),
+      [await usdc.getAddress(), deployer.address],
+      { kind: 'uups', initializer: 'initialize' }
+    );
+    escrow = YapBayEscrow__factory.connect(await escrowInstance.getAddress(), deployer);
   });
 
   it("Should initialize correctly", async () => {
-    expect(await escrow.usdc()).to.equal(usdc.address);
-    expect(await escrow.fixedArbitrator()).to.equal(process.env.ARBITRATOR_ADDRESS);
+    expect(await escrow.usdc()).to.equal(await usdc.getAddress());
+    expect(await escrow.fixedArbitrator()).to.equal(deployer.address);
   });
 });
