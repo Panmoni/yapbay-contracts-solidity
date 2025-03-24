@@ -1,13 +1,11 @@
 # Notes
 
-0. fix current tests
+https://docs.celo.org/developer/deploy/hardhat
 
-npx hardhat clean && npx hardhat compile && npx hardhat test
-
----
-1. deploy locally
-2. full tests
+2. deploy to testnet
 3. integrate with api, frontend, its own listener, etc
+
+https://github.com/celo-org/celo-composer ?
 
 ## Ref
 https://docs.celo.org/
