@@ -1,11 +1,22 @@
 # Notes
 
+## deploy to alfajores
+
 https://docs.celo.org/developer/deploy/hardhat
 
-2. deploy to testnet
-3. integrate with api, frontend, its own listener, etc
+- alfajores deploy script
+- documentation
 
-https://github.com/celo-org/celo-composer ?
+## Next steps on MVP
+- integrate with api, frontend, its own listener, etc
+
+### With MVP, mark the gitcoin grant complete and update Karma GAP
+
+## Roadmap
+- security audit Slither or Mythril
+- gas optimization
 
 ## Ref
 https://docs.celo.org/
+
+https://github.com/celo-org/celo-composer ?
