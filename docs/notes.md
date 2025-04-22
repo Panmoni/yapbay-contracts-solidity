@@ -3,6 +3,7 @@
 ## Roadmap
 - security audit Slither or Mythril
 - gas optimization
+- test for common security issues
 
 ## Ref
 https://docs.celo.org/
