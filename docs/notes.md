@@ -8,6 +8,18 @@
 ## Ref
 https://docs.celo.org/
 
+### Upgrade
+1. make changes
+2. npx hardhat compile
+3. npx hardhat run scripts/upgrade_contract.js --network celo
+4. verify
+
+#### initialize new vars?
+
+f your new contract version adds state variables that need to be set up, you'll need to:
+Add a new initializer function (e.g., initializeV2(...) or configureNewFeature(...)) in your contract.
+Uncomment and use the call option within the upgrades.upgradeProxy(...) function in scripts/upgrade_contract.js to invoke this new initializer during the upgrade process.
+
 ### Deployed on Mainnet
 npx hardhat compile
 
