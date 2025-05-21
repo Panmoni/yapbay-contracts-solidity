@@ -802,7 +802,7 @@ contract YapBayEscrow is
     }
 
     // -------------------------------
-    // I. Balance Query Functions
+    // I. Balance and Escrow Status Query Functions
     // -------------------------------
     /// @notice Returns information about a sequential escrow's target address and balance
     /// @param _escrowId The escrow identifier
@@ -872,5 +872,36 @@ contract YapBayEscrow is
             // the funds have been distributed or returned
             return 0;
         }
+    }
+    
+    /// @notice Checks if an escrow is eligible for auto-cancellation based on its state and deadlines
+    /// @param _escrowId The escrow identifier
+    /// @return A boolean indicating whether the escrow can be auto-cancelled
+    /// @dev This is useful for backend services monitoring for expired escrows that need cancellation
+    function isEligibleForAutoCancel(uint256 _escrowId) external view returns (bool) {
+        Escrow storage escrow = escrows[_escrowId];
+        
+        // Verify that the escrow exists by checking its ID field
+        if (escrow.escrow_id == 0) {
+            return false;
+        }
+        
+        // Check if escrow is in a non-terminal state
+        if (escrow.state == EscrowState.Released || 
+            escrow.state == EscrowState.Cancelled || 
+            escrow.state == EscrowState.Resolved) {
+            return false;
+        }
+        
+        // Check deadline conditions
+        if (escrow.state == EscrowState.Created) {
+            return block.timestamp > escrow.deposit_deadline;
+        }
+        if (escrow.state == EscrowState.Funded) {
+            return !escrow.fiat_paid && block.timestamp > escrow.fiat_deadline;
+        }
+        
+        // For other states (e.g., Disputed), not eligible for auto-cancellation
+        return false;
     }
 }
