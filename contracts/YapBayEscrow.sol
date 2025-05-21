@@ -15,9 +15,9 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeab
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 /*
-  YapBayEscrow is an upgradeable on-chain escrow that supports standard and 
+  YapBayEscrow is an upgradeable on-chain escrow that supports standard and
   sequential (chained remittance) trades with integrated dispute management.
-  
+
   Roles:
     • Seller – creates and funds an escrow.
     • Buyer – confirms fiat payment on-chain.
@@ -26,8 +26,17 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
   The contract uses USDC only (with a maximum of 100 USDC per escrow) and enforces two deadlines:
     • Deposit deadline: 15 minutes after creation.
     • Fiat payment deadline: 30 minutes after funding.
-    
+
   Disputes require each party to post a 5% bond and submit a SHA‑256 evidence hash.
+  
+  Balance Tracking:
+    • Each escrow's balance is tracked in a dedicated mapping (escrowBalances).
+    • Balances are updated when funds are moved (funding, releasing, cancellation, dispute resolution).
+    • Balance changes are logged through EscrowBalanceChanged events.
+    • Sequential escrows have special handling - the funds are transferred to another escrow address.
+    • Use getStoredEscrowBalance() to get the current tracked balance.
+    • Use getCalculatedEscrowBalance() to get the expected balance based on escrow state.
+    • Use getSequentialEscrowInfo() to query information about sequential escrows.
 */
 contract YapBayEscrow is
     Initializable,
@@ -79,7 +88,8 @@ contract YapBayEscrow is
     // State Variables and Constants
     // -------------------------------
     uint256 public nextEscrowId; // auto-incrementing escrow id
-    mapping(uint256 => Escrow) public escrows;
+    mapping(uint256 => Escrow) public escrows; // stores all escrow data by escrow ID
+    mapping(uint256 => uint256) public escrowBalances; // tracks the current balance of each escrow
 
     IERC20Upgradeable public usdc;
     address public fixedArbitrator;
@@ -93,6 +103,7 @@ contract YapBayEscrow is
 
     // -------------------------------
     // Events
+    // All events include relevant information for off-chain tracking
     // -------------------------------
     event EscrowCreated(
         uint256 indexed escrowId,
@@ -168,6 +179,12 @@ contract YapBayEscrow is
         bool decision, // true means buyer wins; false means seller wins
         bytes32 explanationHash,
         string bondAllocation
+    );
+
+    event EscrowBalanceChanged(
+        uint256 indexed escrowId,
+        uint256 newBalance,
+        string reason
     );
 
     // -------------------------------
@@ -269,15 +286,24 @@ contract YapBayEscrow is
         // Use SafeERC20Upgradeable for token transfer
         usdc.safeTransferFrom(msg.sender, address(this), escrow.amount);
 
+        // Track the balance in our internal mapping
+        escrowBalances[_escrowId] = escrow.amount;
+
+        // Update escrow state to Funded and set the fiat payment deadline
         escrow.state = EscrowState.Funded;
         escrow.fiat_deadline = block.timestamp + FIAT_DURATION;
-        escrow.counter++;
+        escrow.counter++; // Increment audit counter for tracking state changes
         emit FundsDeposited(
             _escrowId,
             escrow.trade_id,
             escrow.amount,
             escrow.counter,
             block.timestamp
+        );
+        emit EscrowBalanceChanged(
+            _escrowId,
+            escrow.amount,
+            "Escrow funded"
         );
     }
 
@@ -364,11 +390,19 @@ contract YapBayEscrow is
             );
         }
 
+        // Update escrow state to Released
         escrow.state = EscrowState.Released;
-        escrow.counter++;
+        escrow.counter++; // Increment audit counter for tracking state changes
+
+        // Reset tracked balance as funds are being transferred out
+        escrowBalances[_escrowId] = 0;
 
         if (escrow.sequential) {
+            // Transfer funds to the sequential escrow address
             usdc.safeTransfer(escrow.sequential_escrow_address, escrow.amount);
+            // Note: We don't update escrowBalances for the sequential escrow here
+            // as that would require knowing its escrow_id. Instead, we rely on
+            // that escrow's own funding mechanism to track its balance.
             emit EscrowReleased(
                 _escrowId,
                 escrow.trade_id,
@@ -390,6 +424,11 @@ contract YapBayEscrow is
                 "direct to buyer"
             );
         }
+        emit EscrowBalanceChanged(
+            _escrowId,
+            0,
+            "Escrow released"
+        );
     }
 
     // -------------------------------
@@ -430,6 +469,13 @@ contract YapBayEscrow is
             );
             // Refund funds to Seller.
             usdc.safeTransfer(escrow.seller, escrow.amount);
+            // Reset tracked balance as funds are being transferred out
+            escrowBalances[_escrowId] = 0;
+            emit EscrowBalanceChanged(
+                _escrowId,
+                0,
+                "Escrow cancelled"
+            );
         }
 
         escrow.state = EscrowState.Cancelled;
@@ -482,6 +528,7 @@ contract YapBayEscrow is
             escrow.dispute_bond_seller = bondAmount;
             escrow.dispute_evidence_hash_seller = evidenceHash;
         }
+        // Note: We don't update escrowBalances here as the bond is separate from the escrow amount
         escrow.state = EscrowState.Disputed;
         escrow.counter++;
         emit DisputeOpened(
@@ -508,7 +555,7 @@ contract YapBayEscrow is
             "E105: Invalid state transition"
         );
 
-        // If dispute was initiated by buyer then the responder must be seller and vice-versa.
+        // If dispute was initiated by buyer then the responder must be seller and vice-versa
         if (escrow.dispute_initiator == escrow.buyer) {
             require(msg.sender == escrow.seller, "E102: Unauthorized caller");
             require(
@@ -538,12 +585,13 @@ contract YapBayEscrow is
             escrow.dispute_bond_seller = bondAmount;
             escrow.dispute_evidence_hash_seller = evidenceHash;
         }
+        // Note: We don't update escrowBalances here as the bond is separate from the escrow amount
         emit DisputeResponse(_escrowId, msg.sender, bondAmount, evidenceHash);
     }
 
     // 3. Default Judgment
     /// @notice Called by the arbitrator if the opposing party fails to respond within 72 hours.
-    ///         The function transfers funds according to the default outcome.
+    ///         The function transfers funds according to the default outcome and clears the escrow balance.
     /// @param _escrowId The escrow identifier.
     function defaultJudgment(
         uint256 _escrowId
@@ -570,10 +618,12 @@ contract YapBayEscrow is
             winner = escrow.buyer;
             judgment = "Buyer wins by default";
             if (escrow.sequential) {
+                // Transfer funds to the sequential escrow address
                 usdc.safeTransfer(
                     escrow.sequential_escrow_address,
                     escrow.amount
                 );
+                // Note: We don't update the sequential escrow's balance here
             } else {
                 usdc.safeTransfer(escrow.buyer, escrow.amount);
             }
@@ -583,6 +633,7 @@ contract YapBayEscrow is
             if (escrow.dispute_bond_seller > 0) {
                 usdc.safeTransfer(fixedArbitrator, escrow.dispute_bond_seller);
             }
+            // Note: This is a sequential escrow transfer and we don't update the target's balance
         } else if (
             escrow.dispute_initiator == escrow.seller &&
             escrow.dispute_evidence_hash_buyer == bytes32(0)
@@ -599,6 +650,8 @@ contract YapBayEscrow is
         } else {
             revert("Cannot apply default judgment when both parties responded");
         }
+        // Reset escrow balance as funds are being transferred out
+        escrowBalances[_escrowId] = 0;
         escrow.state = EscrowState.Resolved;
         escrow.counter++;
         emit DisputeResolved(
@@ -607,14 +660,19 @@ contract YapBayEscrow is
             bytes32(0),
             judgment
         );
+        emit EscrowBalanceChanged(
+            _escrowId,
+            0,
+            "Dispute resolved by default judgment"
+        );
     }
 
     // 4. Arbitration Process
     /// @notice Called by the arbitrator to resolve a dispute with an explanation.
     ///         The decision (true means funds released, false means cancellation)
-    ///         determines funds and bond allocation.
+    ///         determines funds and bond allocation. Also clears the escrow balance tracking.
     /// @param _escrowId The escrow identifier.
-    /// @param decision Arbitrator’s decision (true: Buyer wins; false: Seller wins).
+    /// @param decision Arbitrator's decision (true: Buyer wins; false: Seller wins).
     /// @param explanationHash The SHA‑256 hash of the written arbitration explanation.
     function resolveDisputeWithExplanation(
         uint256 _escrowId,
@@ -640,10 +698,12 @@ contract YapBayEscrow is
         if (decision) {
             // Buyer wins – transfer funds to buyer (or sequential escrow address).
             if (escrow.sequential) {
+                // Transfer funds to the sequential escrow address
                 usdc.safeTransfer(
                     escrow.sequential_escrow_address,
                     escrow.amount
                 );
+                // Note: We don't update the sequential escrow's balance here
             } else {
                 usdc.safeTransfer(escrow.buyer, escrow.amount);
             }
@@ -665,6 +725,8 @@ contract YapBayEscrow is
             }
             bondAllocation = "Seller wins: seller bond returned, buyer bond to arbitrator";
         }
+        // Reset escrow balance as funds are being transferred out
+        escrowBalances[_escrowId] = 0;
         escrow.state = EscrowState.Resolved;
         escrow.counter++;
         emit DisputeResolved(
@@ -673,17 +735,27 @@ contract YapBayEscrow is
             explanationHash,
             bondAllocation
         );
+        emit EscrowBalanceChanged(
+            _escrowId,
+            0,
+            "Dispute resolved by arbitration"
+        );
     }
 
     // -------------------------------
     // H. Auto-Cancellation on Deadline
     // -------------------------------
-    /// @notice Called by the arbitrator to auto-cancel an escrow when deadlines are exceeded
-    /// @dev For escrows still in Created (if deposit deadline passed) or Funded (fiat not confirmed
-    ///      and fiat deadline passed)
+    // UUPS Upgradeability function
+    /// @notice Authorizes an upgrade to a new implementation
+    /// @dev Required by the UUPS pattern, only callable by the owner
+    /// @param newImplementation Address of the new implementation contract
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyOwner {}
+    
+    /// @notice Called by the arbitrator to auto-cancel an escrow when deadlines are exceeded
+    /// @dev For escrows still in Created (if deposit deadline passed) or Funded (fiat not confirmed
+    ///      and fiat deadline passed)
 
     function autoCancel(uint256 _escrowId) external nonReentrant whenNotPaused {
         require(msg.sender == fixedArbitrator, "E102: Unauthorized caller");
@@ -708,9 +780,17 @@ contract YapBayEscrow is
                 "Fiat deadline not expired"
             );
             usdc.safeTransfer(escrow.seller, escrow.amount);
+            // Reset tracked balance as funds are being transferred out
+            escrowBalances[_escrowId] = 0;
+            emit EscrowBalanceChanged(
+                _escrowId,
+                0,
+                "Escrow cancelled"
+            );
         }
+        // Update escrow state to Cancelled
         escrow.state = EscrowState.Cancelled;
-        escrow.counter++;
+        escrow.counter++; // Increment audit counter for tracking state changes
         emit EscrowCancelled(
             _escrowId,
             escrow.trade_id,
@@ -719,5 +799,78 @@ contract YapBayEscrow is
             escrow.counter,
             block.timestamp
         );
+    }
+
+    // -------------------------------
+    // I. Balance Query Functions
+    // -------------------------------
+    /// @notice Returns information about a sequential escrow's target address and balance
+    /// @param _escrowId The escrow identifier
+    /// @return isSequential Whether the escrow is a sequential escrow
+    /// @return sequentialAddress The address of the sequential escrow (or zero address if not sequential)
+    /// @return sequentialBalance The USDC balance at the sequential address (or zero if not sequential)
+    /// @dev This function specifically handles sequential escrow information retrieval and should be
+    ///      used instead of trying to detect sequential escrows in other balance functions
+    function getSequentialEscrowInfo(uint256 _escrowId) external view returns (
+        bool isSequential,
+        address sequentialAddress,
+        uint256 sequentialBalance,
+        bool wasReleased
+    ) {
+        Escrow storage escrow = escrows[_escrowId];
+        // Verify that the escrow exists by checking its ID field
+        require(escrow.escrow_id == _escrowId, "Escrow does not exist");
+        
+        if (escrow.sequential && escrow.sequential_escrow_address != address(0)) {
+            return (
+                true, 
+                escrow.sequential_escrow_address,
+                usdc.balanceOf(escrow.sequential_escrow_address),
+                escrow.state == EscrowState.Released
+            );
+        }
+        
+        return (false, address(0), 0, false);
+    }
+    
+    /// @notice Returns the stored balance value of an escrow from the internal tracking
+    /// @param _escrowId The escrow identifier
+    /// @return The balance in USDC smallest unit (e.g. 6 decimals)
+    function getStoredEscrowBalance(uint256 _escrowId) external view returns (uint256) {
+        Escrow storage escrow = escrows[_escrowId];
+        // Verify that the escrow exists by checking its ID field
+        require(escrow.escrow_id == _escrowId, "Escrow does not exist");
+
+        // Return the balance we've tracked in our mapping
+        // This is our source of truth for balance tracking within the contract
+        // Note: For sequential escrows that have been released, this will return 0
+        // Use getSequentialEscrowInfo() to get information about target sequential escrows
+        return escrowBalances[_escrowId];
+    }
+
+    /// @notice Calculates the expected balance of an escrow based on its state.
+    /// @notice Returns the calculated balance based on escrow state and type.
+    ///         This is useful for displaying the logical balance based on the escrow's state.
+    /// @param _escrowId The escrow identifier
+    /// @return The expected balance in USDC smallest unit (e.g. 6 decimals)
+    /// @dev This function implements escrow business logic regarding when a balance should
+    ///      exist based on the escrow's state, which may differ from the stored balance
+    function getCalculatedEscrowBalance(uint256 _escrowId) external view returns (uint256) {
+        Escrow storage escrow = escrows[_escrowId];
+        // Verify that the escrow exists by checking its ID field
+        require(escrow.escrow_id == _escrowId, "Escrow does not exist");
+
+        // Check the state of the escrow to determine the expected balance
+        if (escrow.state == EscrowState.Funded || escrow.state == EscrowState.Disputed) {
+            // For funded or disputed escrows, the full amount should be available
+            return escrow.amount;
+        } else if (escrow.state == EscrowState.Created) {
+            // For created but not yet funded escrows
+            return 0;
+        } else {
+            // For other states (Released, Cancelled, Resolved),
+            // the funds have been distributed or returned
+            return 0;
+        }
     }
 }
