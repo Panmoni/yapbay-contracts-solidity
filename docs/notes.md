@@ -1,5 +1,9 @@
 # Notes
 
+re-deploy fresh to avoid escrow id conflicts
+
+## implement backend monitoring service to ensure funds are not getting stranded in escrows
+
 ## Roadmap
 - security audit Slither or Mythril
 - gas optimization
@@ -24,8 +28,6 @@ Uncomment and use the call option within the upgrades.upgradeProxy(...) function
 npx hardhat compile
 
 npx hardhat run scripts/deploy_mainnet.js --network celo
-
-
 
 ### Deployed on Alfajores
 

@@ -55,19 +55,23 @@ mkdir -p coverage_reports
 run_coverage "test/YapBayEscrow.test.ts" "base"
 run_coverage "test/YapBayEscrow.test.ts test/YapBayEscrow.balance.test.ts" "with_balance"
 run_coverage "test/YapBayEscrow.test.ts test/YapBayEscrow.balance.test.ts test/YapBayEscrow.edge.test.ts" "with_edge"
+run_coverage "test/YapBayEscrow.test.ts test/YapBayEscrow.balance.test.ts test/YapBayEscrow.edge.test.ts test/YapBayEscrow.targeted.test.ts" "with_targeted"
 
 # Calculate improvements
 BASE_BRANCH=$(cat .coverage_base_branch)
 BAL_BRANCH=$(cat .coverage_with_balance_branch)
 EDGE_BRANCH=$(cat .coverage_with_edge_branch)
+TARGET_BRANCH=$(cat .coverage_with_targeted_branch)
 
 BASE_LINE=$(cat .coverage_base_line)
 BAL_LINE=$(cat .coverage_with_balance_line)
 EDGE_LINE=$(cat .coverage_with_edge_line)
+TARGET_LINE=$(cat .coverage_with_targeted_line)
 
 BASE_FUNC=$(cat .coverage_base_func)
 BAL_FUNC=$(cat .coverage_with_balance_func)
 EDGE_FUNC=$(cat .coverage_with_edge_func)
+TARGET_FUNC=$(cat .coverage_with_targeted_func)
 
 # Display summary
 echo -e "\n${GREEN}=========================================================="
@@ -78,34 +82,37 @@ echo -e "${YELLOW}BRANCH COVERAGE:${NC}"
 echo "Base tests:                 $BASE_BRANCH%"
 echo "With balance tests:         $BAL_BRANCH% ($(echo "$BAL_BRANCH - $BASE_BRANCH" | bc) percentage points gain)"
 echo "With edge case tests:       $EDGE_BRANCH% ($(echo "$EDGE_BRANCH - $BAL_BRANCH" | bc) percentage points gain)"
-echo -e "TOTAL IMPROVEMENT:         ${GREEN}$(echo "$EDGE_BRANCH - $BASE_BRANCH" | bc) percentage points${NC}"
+echo "With targeted tests:        $TARGET_BRANCH% ($(echo "$TARGET_BRANCH - $EDGE_BRANCH" | bc) percentage points gain)"
+echo -e "TOTAL IMPROVEMENT:         ${GREEN}$(echo "$TARGET_BRANCH - $BASE_BRANCH" | bc) percentage points${NC}"
 
 echo -e "\n${YELLOW}LINE COVERAGE:${NC}"
 echo "Base tests:                 $BASE_LINE%"
 echo "With balance tests:         $BAL_LINE% ($(echo "$BAL_LINE - $BASE_LINE" | bc) percentage points gain)"
 echo "With edge case tests:       $EDGE_LINE% ($(echo "$EDGE_LINE - $BAL_LINE" | bc) percentage points gain)"
-echo -e "TOTAL IMPROVEMENT:         ${GREEN}$(echo "$EDGE_LINE - $BASE_LINE" | bc) percentage points${NC}"
+echo "With targeted tests:        $TARGET_LINE% ($(echo "$TARGET_LINE - $EDGE_LINE" | bc) percentage points gain)"
+echo -e "TOTAL IMPROVEMENT:         ${GREEN}$(echo "$TARGET_LINE - $BASE_LINE" | bc) percentage points${NC}"
 
 echo -e "\n${YELLOW}FUNCTION COVERAGE:${NC}"
 echo "Base tests:                 $BASE_FUNC%"
 echo "With balance tests:         $BAL_FUNC% ($(echo "$BAL_FUNC - $BASE_FUNC" | bc) percentage points gain)"
 echo "With edge case tests:       $EDGE_FUNC% ($(echo "$EDGE_FUNC - $BAL_FUNC" | bc) percentage points gain)"
-echo -e "TOTAL IMPROVEMENT:         ${GREEN}$(echo "$EDGE_FUNC - $BASE_FUNC" | bc) percentage points${NC}"
+echo "With targeted tests:        $TARGET_FUNC% ($(echo "$TARGET_FUNC - $EDGE_FUNC" | bc) percentage points gain)"
+echo -e "TOTAL IMPROVEMENT:         ${GREEN}$(echo "$TARGET_FUNC - $BASE_FUNC" | bc) percentage points${NC}"
 
 echo -e "\n${GREEN}=========================================================="
 echo "    FINAL VERDICT"
 echo "==========================================================${NC}"
 
 # Determine overall success
-if (( $(echo "$EDGE_BRANCH >= 85" | bc -l) )); then
+if (( $(echo "$TARGET_BRANCH >= 85" | bc -l) )); then
   BRANCH_STATUS="${GREEN}GOOD${NC}"
 else
   BRANCH_STATUS="${RED}NEEDS IMPROVEMENT${NC}"
 fi
 
-echo -e "Branch coverage: $EDGE_BRANCH% - $BRANCH_STATUS"
-echo -e "Line coverage: $EDGE_LINE% - ${GREEN}GOOD${NC}"
-echo -e "Function coverage: $EDGE_FUNC% - ${GREEN}GOOD${NC}"
+echo -e "Branch coverage: $TARGET_BRANCH% - $BRANCH_STATUS"
+echo -e "Line coverage: $TARGET_LINE% - ${GREEN}GOOD${NC}"
+echo -e "Function coverage: $TARGET_FUNC% - ${GREEN}GOOD${NC}"
 
 echo -e "\n${YELLOW}Full coverage reports available in the coverage_reports directory${NC}"
 echo -e "${YELLOW}Latest report available at: coverage/index.html${NC}"
