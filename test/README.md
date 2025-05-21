@@ -45,7 +45,7 @@ This script will:
 2. Run the main contract tests
 3. Run the balance tracking tests
 
-### Running Specific Tests
+# Running Specific Tests
 
 To run just the main tests:
 
@@ -57,6 +57,12 @@ To run just the balance tests:
 
 ```bash
 npx hardhat test test/YapBayEscrow.balance.test.ts
+```
+
+To run just the edge case tests (improves branch coverage):
+
+```bash
+npx hardhat test test/YapBayEscrow.edge.test.ts
 ```
 
 ### Test Coverage
@@ -74,6 +80,8 @@ npx hardhat coverage
 ```
 
 The coverage report will be generated in the `coverage/` directory and can be viewed by opening `coverage/index.html` in your browser.
+
+The edge case tests in `YapBayEscrow.edge.test.ts` are specifically designed to improve branch coverage by testing uncommon execution paths and boundary conditions.
 
 ## Time-dependent Tests
 
@@ -101,12 +109,20 @@ The tests are organized into describe blocks based on functionality:
 - **Dispute Handling**: Tests for dispute resolution
 - **Auto-Cancellation**: Tests for auto-cancellation
 
-### New Balance Test File (`YapBayEscrow.balance.test.ts`)
+### Balance Test File (`YapBayEscrow.balance.test.ts`)
 - **Balance Tracking**: Tests for balance tracking and event emissions
 - **Balance Query Functions**: Tests for the `getStoredEscrowBalance` and `getCalculatedEscrowBalance` functions
 - **Sequential Escrow Info**: Tests for the `getSequentialEscrowInfo` function
 - **Auto-Cancel Eligibility**: Tests for the `isEligibleForAutoCancel` function
 - **Balance Updates in Dispute Resolution**: Tests for balance updates during dispute resolution
+
+### Edge Case Test File (`YapBayEscrow.edge.test.ts`)
+- **Sequential Escrow Edge Cases**: Tests for complex sequential escrow scenarios like chained escrows
+- **Dispute Resolution Edge Cases**: Tests for extreme dispute amounts and timing conditions
+- **Deadline Edge Cases**: Tests for behaviors at exact deadline boundaries
+- **State Transition Edge Cases**: Tests for all possible invalid state transitions
+- **Balance Tracking Edge Cases**: Tests for minimum amounts and multiple sequential transfers
+- **Error Condition Edge Cases**: Tests for uncommon error scenarios and edge conditions
 
 ## Constants
 

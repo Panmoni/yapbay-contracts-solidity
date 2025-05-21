@@ -32,6 +32,15 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# Run the edge case tests
+echo "Running edge case tests..."
+npx hardhat test test/YapBayEscrow.edge.test.ts
+
+if [ $? -ne 0 ]; then
+    echo "Edge case tests failed. Exiting."
+    exit 1
+fi
+
 # If we've made it here, all tests passed
 echo "==============================================="
 echo "✅ All tests passed successfully!"
