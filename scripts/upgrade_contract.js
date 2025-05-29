@@ -2,31 +2,64 @@ const { ethers, upgrades } = require("hardhat");
 require("dotenv").config();
 
 // #############################################################################
-// #                          CONFIGURATION                                    #
+// #                    UNIFIED UPGRADE CONFIGURATION                          #
 // #############################################################################
-
-// The address of the UUPS proxy contract that you want to upgrade.
-// Fetched from environment variable MAINNET_CELO_PROXY
-const PROXY_ADDRESS = process.env.MAINNET_CELO_PROXY;
 
 // The name of the new contract version (must match the contract name in your .sol file).
 // If you modified YapBayEscrow.sol directly, this will be "YapBayEscrow".
 // If you created YapBayEscrowV2.sol, this would be "YapBayEscrowV2".
 const NEW_CONTRACT_NAME = "YapBayEscrow"; 
 
+// Network-specific configuration
+const NETWORK_CONFIG = {
+  celo: {
+    proxyEnvVar: "MAINNET_CELO_PROXY",
+    displayName: "Celo Mainnet",
+    chainId: 42220,
+    explorerUrl: "https://celoscan.io/address/",
+    verifyNetwork: "celo"
+  },
+  alfajores: {
+    proxyEnvVar: "TESTNET_CELO_PROXY", 
+    displayName: "Celo Alfajores Testnet",
+    chainId: 44787,
+    explorerUrl: "https://alfajores.celoscan.io/address/",
+    verifyNetwork: "alfajores"
+  }
+};
+
 // #############################################################################
 
 async function main() {
+  // Get the current network from hardhat runtime environment
+  const networkName = hre.network.name;
+  const networkConfig = NETWORK_CONFIG[networkName];
+  
+  if (!networkConfig) {
+    throw new Error(`Unsupported network: ${networkName}. Supported networks: ${Object.keys(NETWORK_CONFIG).join(", ")}`);
+  }
+
+  // Get proxy address from appropriate environment variable
+  const PROXY_ADDRESS = process.env[networkConfig.proxyEnvVar];
+  
   if (!PROXY_ADDRESS || !PROXY_ADDRESS.startsWith("0x")) {
-    throw new Error("PROXY_ADDRESS is not set in .env (expected MAINNET_CELO_PROXY) or is invalid.");
+    throw new Error(`PROXY_ADDRESS is not set in .env (expected ${networkConfig.proxyEnvVar}) or is invalid.`);
   }
   if (!NEW_CONTRACT_NAME) {
-    throw new Error("NEW_CONTRACT_NAME is not set in scripts/upgrade_contract.js");
+    throw new Error("NEW_CONTRACT_NAME is not set in scripts/upgrade_contract_unified.js");
   }
 
   const [deployer] = await ethers.getSigners();
   const deployerAddress = await deployer.getAddress();
 
+  // Network-specific header
+  const isTestnet = networkName === "alfajores";
+  const headerText = isTestnet ? "TESTNET CONTRACT UPGRADE" : "MAINNET CONTRACT UPGRADE";
+  
+  console.log("=".repeat(60));
+  console.log(`            ${headerText}`);
+  console.log("=".repeat(60));
+  console.log(`Network: ${networkConfig.displayName} (Chain ID: ${networkConfig.chainId})`);
   console.log(`Upgrading proxy at: ${PROXY_ADDRESS}`);
   console.log(`Using account (owner of proxy): ${deployerAddress}`);
   
@@ -44,6 +77,9 @@ async function main() {
 
   console.log(`Attempting to upgrade proxy ${PROXY_ADDRESS} to new implementation of ${NEW_CONTRACT_NAME}...`);
   
+  // Adjust timeout based on network (testnet can be faster)
+  const timeout = isTestnet ? 300000 : 600000; // 5 minutes for testnet, 10 for mainnet
+  
   const upgradedProxy = await upgrades.upgradeProxy(PROXY_ADDRESS, NewContractFactory, {
     // If your new contract version has a new initializer function (e.g., initializeV2)
     // and you want to call it as part of the upgrade process, you can specify it here.
@@ -51,7 +87,7 @@ async function main() {
     //   fn: 'initializeV2', // Name of the new initializer function in your V2 contract
     //   args: [/* arguments for initializeV2 */] 
     // },
-    timeout: 0, // No timeout, or set appropriately for mainnet e.g. 600000 (10 minutes)
+    timeout: timeout,
     // kind: 'uups' // This is usually inferred correctly for UUPS proxies but can be specified
   });
 
@@ -63,17 +99,24 @@ async function main() {
     upgradedProxy.target // PROXY_ADDRESS should be the same as upgradedProxy.target
   );
 
+  console.log("=".repeat(60));
+  console.log("              UPGRADE SUCCESSFUL!");
+  console.log("=".repeat(60));
   console.log(`Proxy at ${PROXY_ADDRESS} successfully upgraded!`);
   console.log(`New implementation contract deployed at: ${newImplementationAddress}`);
   console.log("----------------------------------------------------");
-  console.log("To verify the NEW IMPLEMENTATION contract on CeloScan:");
+  console.log("To verify the NEW IMPLEMENTATION contract:");
   console.log(
-    `npx hardhat verify --network celo ${newImplementationAddress}`
+    `npx hardhat verify --network ${networkConfig.verifyNetwork} ${newImplementationAddress}`
   );
   console.log("----------------------------------------------------");
   console.log("The PROXY address remains the same:", upgradedProxy.target);
   console.log("Users continue to interact with this proxy address.");
   console.log("----------------------------------------------------");
+  console.log("Explorer Links:");
+  console.log(`Proxy: ${networkConfig.explorerUrl}${upgradedProxy.target}`);
+  console.log(`Implementation: ${networkConfig.explorerUrl}${newImplementationAddress}`);
+  console.log("=".repeat(60));
 
 }
 
@@ -83,4 +126,4 @@ main()
     console.error("Upgrade script failed:");
     console.error(error);
     process.exit(1);
-  }); 
+  });
