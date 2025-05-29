@@ -1,40 +1,27 @@
 # Notes
 
-re-deploy fresh to avoid escrow id conflicts
-
-## implement backend monitoring service to ensure funds are not getting stranded in escrows
-
-## Roadmap
-- security audit Slither or Mythril
-- gas optimization
-- test for common security issues
-
 ## Ref
-https://docs.celo.org/
+### check balance
+npx hardhat check-balance --network alfajores
+npx hardhat check-balance --network celo
 
-### Upgrade
-1. make changes
-2. npx hardhat compile
-3. npx hardhat run scripts/upgrade_contract.js --network celo
-4. verify
-
-#### initialize new vars?
-
-f your new contract version adds state variables that need to be set up, you'll need to:
-Add a new initializer function (e.g., initializeV2(...) or configureNewFeature(...)) in your contract.
-Uncomment and use the call option within the upgrades.upgradeProxy(...) function in scripts/upgrade_contract.js to invoke this new initializer during the upgrade process.
-
-### Deployed on Mainnet
+### compile
 npx hardhat compile
 
+### deploy on mainnet
 npx hardhat run scripts/deploy_mainnet.js --network celo
 
-### Deployed on Alfajores
+### deploy on testnet
+npx hardhat run scripts/deploy.ts --network alfajores
 
-https://alfajores.celoscan.io/address/0xC8BFB8a31fFbAF5c85bD97a1728aC43418B5871C#code
-https://alfajores.celoscan.io/address/0x7A7a657a04EA42F3a8168450eFC46203c363a4Cd#code
+### verify
+npx hardhat verify --network celo <proxy_address>
+npx hardhat verify --network celo <implementation_address>
 
-npx hardhat verify --network alfajores 0xC8BFB8a31fFbAF5c85bD97a1728aC43418B5871C
+### test
+npx hardhat console --network alfajores
+npx hardhat console --network celo
 
-
-0xC8BFB8a31fFbAF5c85bD97a1728aC43418B5871C
+### Upgrade
+npx hardhat run scripts/upgrade_contract.js --network celo
+npx hardhat run scripts/upgrade_contract.js --network alfajores
