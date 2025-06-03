@@ -93,6 +93,7 @@ contract YapBayEscrow is
 
     IERC20Upgradeable public usdc;
     address public fixedArbitrator;
+    string public constant VERSION = "0.1.1"; // Contract version
 
     // Constants (USDC assumed to have 6 decimals)
     uint256 public constant MAX_AMOUNT = 100 * (10 ** 6); // 100 USDC maximum
@@ -116,7 +117,8 @@ contract YapBayEscrow is
         uint256 fiat_deadline,
         bool sequential,
         address sequentialEscrowAddress,
-        uint256 timestamp
+        uint256 timestamp,
+        string version
     );
 
     event FundsDeposited(
@@ -211,9 +213,9 @@ contract YapBayEscrow is
     /// @notice Called by the seller to create a new escrow.
     /// @param _tradeId Off‐chain trade identifier (e.g. 4500 for leg1).
     /// @param _buyer The address of the Buyer.
-    /// @param _amount The amount (in USDC’s smallest unit) to be escrowed (must be nonzero and ≤ MAX_AMOUNT).
+    /// @param _amount The amount (in USDC's smallest unit) to be escrowed (must be nonzero and ≤ MAX_AMOUNT).
     /// @param _sequential True if this is part of a chained remittance trade.
-    /// @param _sequentialEscrowAddress If sequential, the Buyer’s pre‐created leg2 escrow address.
+    /// @param _sequentialEscrowAddress If sequential, the Buyer's pre‐created leg2 escrow address.
     /// @return The new escrow id.
     function createEscrow(
         uint256 _tradeId,
@@ -260,7 +262,8 @@ contract YapBayEscrow is
             newEscrow.fiat_deadline,
             _sequential,
             newEscrow.sequential_escrow_address,
-            block.timestamp
+            block.timestamp,
+            VERSION
         );
         nextEscrowId++;
         return newEscrow.escrow_id;
@@ -300,11 +303,7 @@ contract YapBayEscrow is
             escrow.counter,
             block.timestamp
         );
-        emit EscrowBalanceChanged(
-            _escrowId,
-            escrow.amount,
-            "Escrow funded"
-        );
+        emit EscrowBalanceChanged(_escrowId, escrow.amount, "Escrow funded");
     }
 
     // -------------------------------
@@ -424,11 +423,7 @@ contract YapBayEscrow is
                 "direct to buyer"
             );
         }
-        emit EscrowBalanceChanged(
-            _escrowId,
-            0,
-            "Escrow released"
-        );
+        emit EscrowBalanceChanged(_escrowId, 0, "Escrow released");
     }
 
     // -------------------------------
@@ -471,11 +466,7 @@ contract YapBayEscrow is
             usdc.safeTransfer(escrow.seller, escrow.amount);
             // Reset tracked balance as funds are being transferred out
             escrowBalances[_escrowId] = 0;
-            emit EscrowBalanceChanged(
-                _escrowId,
-                0,
-                "Escrow cancelled"
-            );
+            emit EscrowBalanceChanged(_escrowId, 0, "Escrow cancelled");
         }
 
         escrow.state = EscrowState.Cancelled;
@@ -544,7 +535,7 @@ contract YapBayEscrow is
     /// @notice Called by the opposing party to respond to a dispute within 72 hours.
     ///         The responder must post the same 5% bond and an evidence hash.
     /// @param _escrowId The escrow identifier.
-    /// @param evidenceHash The SHA‑256 hash of the responder’s evidence.
+    /// @param evidenceHash The SHA‑256 hash of the responder's evidence.
     function respondToDisputeWithBond(
         uint256 _escrowId,
         bytes32 evidenceHash
@@ -752,7 +743,7 @@ contract YapBayEscrow is
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyOwner {}
-    
+
     /// @notice Called by the arbitrator to auto-cancel an escrow when deadlines are exceeded
     /// @dev For escrows still in Created (if deposit deadline passed) or Funded (fiat not confirmed
     ///      and fiat deadline passed)
@@ -782,11 +773,7 @@ contract YapBayEscrow is
             usdc.safeTransfer(escrow.seller, escrow.amount);
             // Reset tracked balance as funds are being transferred out
             escrowBalances[_escrowId] = 0;
-            emit EscrowBalanceChanged(
-                _escrowId,
-                0,
-                "Escrow cancelled"
-            );
+            emit EscrowBalanceChanged(_escrowId, 0, "Escrow cancelled");
         }
         // Update escrow state to Cancelled
         escrow.state = EscrowState.Cancelled;
@@ -811,32 +798,42 @@ contract YapBayEscrow is
     /// @return sequentialBalance The USDC balance at the sequential address (or zero if not sequential)
     /// @dev This function specifically handles sequential escrow information retrieval and should be
     ///      used instead of trying to detect sequential escrows in other balance functions
-    function getSequentialEscrowInfo(uint256 _escrowId) external view returns (
-        bool isSequential,
-        address sequentialAddress,
-        uint256 sequentialBalance,
-        bool wasReleased
-    ) {
+    function getSequentialEscrowInfo(
+        uint256 _escrowId
+    )
+        external
+        view
+        returns (
+            bool isSequential,
+            address sequentialAddress,
+            uint256 sequentialBalance,
+            bool wasReleased
+        )
+    {
         Escrow storage escrow = escrows[_escrowId];
         // Verify that the escrow exists by checking its ID field
         require(escrow.escrow_id == _escrowId, "Escrow does not exist");
-        
-        if (escrow.sequential && escrow.sequential_escrow_address != address(0)) {
+
+        if (
+            escrow.sequential && escrow.sequential_escrow_address != address(0)
+        ) {
             return (
-                true, 
+                true,
                 escrow.sequential_escrow_address,
                 usdc.balanceOf(escrow.sequential_escrow_address),
                 escrow.state == EscrowState.Released
             );
         }
-        
+
         return (false, address(0), 0, false);
     }
-    
+
     /// @notice Returns the stored balance value of an escrow from the internal tracking
     /// @param _escrowId The escrow identifier
     /// @return The balance in USDC smallest unit (e.g. 6 decimals)
-    function getStoredEscrowBalance(uint256 _escrowId) external view returns (uint256) {
+    function getStoredEscrowBalance(
+        uint256 _escrowId
+    ) external view returns (uint256) {
         Escrow storage escrow = escrows[_escrowId];
         // Verify that the escrow exists by checking its ID field
         require(escrow.escrow_id == _escrowId, "Escrow does not exist");
@@ -855,13 +852,18 @@ contract YapBayEscrow is
     /// @return The expected balance in USDC smallest unit (e.g. 6 decimals)
     /// @dev This function implements escrow business logic regarding when a balance should
     ///      exist based on the escrow's state, which may differ from the stored balance
-    function getCalculatedEscrowBalance(uint256 _escrowId) external view returns (uint256) {
+    function getCalculatedEscrowBalance(
+        uint256 _escrowId
+    ) external view returns (uint256) {
         Escrow storage escrow = escrows[_escrowId];
         // Verify that the escrow exists by checking its ID field
         require(escrow.escrow_id == _escrowId, "Escrow does not exist");
 
         // Check the state of the escrow to determine the expected balance
-        if (escrow.state == EscrowState.Funded || escrow.state == EscrowState.Disputed) {
+        if (
+            escrow.state == EscrowState.Funded ||
+            escrow.state == EscrowState.Disputed
+        ) {
             // For funded or disputed escrows, the full amount should be available
             return escrow.amount;
         } else if (escrow.state == EscrowState.Created) {
@@ -873,26 +875,30 @@ contract YapBayEscrow is
             return 0;
         }
     }
-    
+
     /// @notice Checks if an escrow is eligible for auto-cancellation based on its state and deadlines
     /// @param _escrowId The escrow identifier
     /// @return A boolean indicating whether the escrow can be auto-cancelled
     /// @dev This is useful for backend services monitoring for expired escrows that need cancellation
-    function isEligibleForAutoCancel(uint256 _escrowId) external view returns (bool) {
+    function isEligibleForAutoCancel(
+        uint256 _escrowId
+    ) external view returns (bool) {
         Escrow storage escrow = escrows[_escrowId];
-        
+
         // Verify that the escrow exists by checking its ID field
         if (escrow.escrow_id == 0) {
             return false;
         }
-        
+
         // Check if escrow is in a non-terminal state
-        if (escrow.state == EscrowState.Released || 
-            escrow.state == EscrowState.Cancelled || 
-            escrow.state == EscrowState.Resolved) {
+        if (
+            escrow.state == EscrowState.Released ||
+            escrow.state == EscrowState.Cancelled ||
+            escrow.state == EscrowState.Resolved
+        ) {
             return false;
         }
-        
+
         // Check deadline conditions
         if (escrow.state == EscrowState.Created) {
             return block.timestamp > escrow.deposit_deadline;
@@ -900,7 +906,7 @@ contract YapBayEscrow is
         if (escrow.state == EscrowState.Funded) {
             return !escrow.fiat_paid && block.timestamp > escrow.fiat_deadline;
         }
-        
+
         // For other states (e.g., Disputed), not eligible for auto-cancellation
         return false;
     }

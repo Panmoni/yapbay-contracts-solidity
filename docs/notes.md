@@ -1,5 +1,7 @@
 # Notes
 
+pending addition of versioning to contract
+
 ## Ref
 ### check balance
 npx hardhat check-balance --network alfajores
