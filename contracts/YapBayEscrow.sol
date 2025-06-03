@@ -93,7 +93,7 @@ contract YapBayEscrow is
 
     IERC20Upgradeable public usdc;
     address public fixedArbitrator;
-    string public constant VERSION = "0.1.1"; // Contract version
+    string public constant VERSION = "0.1.2"; // Contract version
 
     // Constants (USDC assumed to have 6 decimals)
     uint256 public constant MAX_AMOUNT = 100 * (10 ** 6); // 100 USDC maximum
